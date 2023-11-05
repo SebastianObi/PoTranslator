@@ -420,10 +420,7 @@ def setup(path=None, file=None, lng_src=None, lng_dst=None, translator=None, tra
                 if entry.msgid == entry.msgstr:
                     count_skipped += 1
                     continue
-                if entry.msgstr != "":
-                    text_src = entry.msgstr
-                else:
-                    text_src = entry.msgid
+                text_src = entry.msgid
 
             cached = False
             if cache_read:
