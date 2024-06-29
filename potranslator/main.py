@@ -69,7 +69,7 @@ else:
 # Globals
 
 
-PATH = os.path.expanduser("~") + "/." + __package_name__
+PATH = os.path.expanduser("~")+"/.config/"+__package_name__
 TRANSLATOR = None
 
 
@@ -275,7 +275,7 @@ def setup_file(path, lng_src, lng_dst, force=False):
 
 
 #### Setup #####
-def setup(path=None, file=None, lng_src=None, lng_dst=None, translator=None, translator_key=None, cache=False, cache_read=False, cache_write=False, force=False, wait=0, autosave=50, loglevel=None, fuzzy_enable=False, fuzzy_disable=False, msgid_force=None, msgid_force_original=None):
+def setup(path=None, file=None, lng_src=None, lng_dst=None, translator=None, translator_key=None, cache=False, cache_read=False, cache_write=False, force=False, wait=0, autosave=50, loglevel=None, fuzzy=False, fuzzy_enable=False, fuzzy_disable=False, msgid_force=None, msgid_force_original=None, replace_both=None, replace_src=None, replace_dst=None):
     global LOG_LEVEL
 
     config = __config__
@@ -319,6 +319,36 @@ def setup(path=None, file=None, lng_src=None, lng_dst=None, translator=None, tra
         msgid_force_original = msgid_force_original.split(',')
     else:
         msgid_force_original = []
+
+    if replace_both:
+        parts = replace_both.split(",")
+        replace_src = {}
+        replace_dst = {}
+        for part in parts:
+            if "=" in part:
+                key, value = part.split("=", 1)
+                replace_src[key] = value
+                replace_dst[value] = key
+    else:
+        if replace_src:
+            parts = replace_src.split(",")
+            replace_src = {}
+            for part in parts:
+                if "=" in part:
+                    key, value = part.split("=", 1)
+                    replace_src[key] = value
+        else:
+            replace_src = {}
+
+        if replace_dst:
+            parts = replace_src.split(",")
+            replace_dst = {}
+            for part in parts:
+                if "=" in part:
+                    key, value = part.split("=", 1)
+                    replace_dst[key] = value
+        else:
+            replace_dst = {}
 
     setup_translate(lng_src=lng_src, lng_dst=lng_dst, translator=translator, translator_key=translator_key)
 
@@ -386,7 +416,8 @@ def setup(path=None, file=None, lng_src=None, lng_dst=None, translator=None, tra
             for value in msgid_force:
                 if value in entry.msgid:
                     entry.msgstr = ""
-                    entry.fuzzy = False
+                    if fuzzy:
+                        entry.fuzzy = False
                     break
 
             forced = False
@@ -394,10 +425,12 @@ def setup(path=None, file=None, lng_src=None, lng_dst=None, translator=None, tra
                 if value in entry.msgid:
                     if entry.msgid in po_dict and po_dict[entry.msgid] != "":
                         entry.msgstr = po_dict[entry.msgid]
-                        entry.fuzzy = False
+                        if fuzzy:
+                            entry.fuzzy = False
                     else:
                         entry.msgstr = entry.msgid
-                        entry.fuzzy = False
+                        if fuzzy:
+                            entry.fuzzy = False
                     count_forced += 1
                     forced = True
                     break
@@ -422,18 +455,25 @@ def setup(path=None, file=None, lng_src=None, lng_dst=None, translator=None, tra
                     continue
                 text_src = entry.msgid
 
+            text_src_replaced = text_src
+            for key, value in replace_src.items():
+                text_src_replaced = text_src_replaced.replace(key, value)
+
             cached = False
             if cache_read:
-                if text_src in cache[translator][lng_src+"_"+lng_dst]:
-                    text_dst = cache[translator][lng_src+"_"+lng_dst][text_src]
+                if text_src_replaced in cache[translator][lng_src+"_"+lng_dst]:
+                    text_dst = cache[translator][lng_src+"_"+lng_dst][text_src_replaced]
                     cached = True
 
             if not cached:
                 if wait:
                     time.sleep(wait/1000.0)
-                text_dst = translate(text_src, lng_src, lng_dst, translator)
+                text_dst = translate(text_src_replaced, lng_src, lng_dst, translator)
 
             if text_dst != "":
+                for key, value in replace_dst.items():
+                    text_dst = text_dst.replace(key, value)
+
                 if not cached and cache_write:
                     cache[translator][lng_src+"_"+lng_dst][text_src] = text_dst
 
@@ -472,10 +512,11 @@ def setup(path=None, file=None, lng_src=None, lng_dst=None, translator=None, tra
 
                 entry.msgstr = text_dst
 
-                if fuzzy_enable:
-                    entry.fuzzy = True
-                elif fuzzy_disable:
-                    entry.fuzzy = False
+                if fuzzy:
+                    if fuzzy_enable:
+                        entry.fuzzy = True
+                    elif fuzzy_disable:
+                        entry.fuzzy = False
 
                 i += 1
                 if i >= autosave:
@@ -555,14 +596,19 @@ def main():
         parser.add_argument("-a", "--autosave", action="store", type=int, default=50, help="Automatic saving after x-translations")
         parser.add_argument("-l", "--loglevel", action="store", type=int, default=LOG_LEVEL, help="Log level")
 
+        parser.add_argument("--fuzzy", action="store_true", default=False, help="Change/Set the 'fuzzy' flag")
         parser.add_argument("--fuzzy_enable", action="store_true", default=False, help="Enable the 'fuzzy' flag on all translated entries")
         parser.add_argument("--fuzzy_disable", action="store_true", default=False, help="Disable the 'fuzzy' flag on all translated entries")
         parser.add_argument("--msgid_force", action="store", type=str, default=None, help="Force a new translation for the following msgid's (comma separated)")
         parser.add_argument("--msgid_force_original", action="store", type=str, default=None, help="Force original translation for the following msgid's (comma separated)")
 
+        parser.add_argument("--replace_both", action="store", type=str, default=None, help="Replace source and destination string with other string: search=replace,search=replace,...")
+        parser.add_argument("--replace_src", action="store", type=str, default=None, help="Replace source string with other string: search=replace,search=replace,...")
+        parser.add_argument("--replace_dst", action="store", type=str, default=None, help="Replace destination string with other string: search=replace,search=replace,...")
+
         params = parser.parse_args()
 
-        setup(path=params.path, file=params.file, lng_src=params.lng_src, lng_dst=params.lng_dst, translator=params.translator, translator_key=params.translator_key, cache=params.cache, cache_read=params.cache_read, cache_write=params.cache_write, force=params.force, wait=params.wait, autosave=params.autosave, loglevel=params.loglevel, fuzzy_enable=params.fuzzy_enable, fuzzy_disable=params.fuzzy_disable, msgid_force=params.msgid_force, msgid_force_original=params.msgid_force_original)
+        setup(path=params.path, file=params.file, lng_src=params.lng_src, lng_dst=params.lng_dst, translator=params.translator, translator_key=params.translator_key, cache=params.cache, cache_read=params.cache_read, cache_write=params.cache_write, force=params.force, wait=params.wait, autosave=params.autosave, loglevel=params.loglevel, fuzzy=params.fuzzy, fuzzy_enable=params.fuzzy_enable, fuzzy_disable=params.fuzzy_disable, msgid_force=params.msgid_force, msgid_force_original=params.msgid_force_original, replace_both=params.replace_both, replace_src=params.replace_src, replace_dst=params.replace_dst)
 
     except KeyboardInterrupt:
         print("Terminated by CTRL-C")
