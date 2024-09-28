@@ -89,7 +89,7 @@ setuptools.setup(
              get_var(version_file, "__package_name__")+'=potranslator.main:main',
         ]
     },
-    install_requires=["polib"],
+    install_requires=["polib", "translators"],
     extras_require={
         "macos": ["pyobjus"],
     },
